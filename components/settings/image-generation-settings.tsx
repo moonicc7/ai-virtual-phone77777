@@ -88,6 +88,7 @@ export function ImageGenerationSettings() {
             size: settings.size,
             quality: settings.quality,
             extraPrompt: settings.extraPrompt,
+            negativePrompt: settings.negativePrompt || "",
         }]
     ), [settings]);
     const activeOpenAiPresetId = settings.activeOpenAiPresetId && openaiPresets.some(p => p.id === settings.activeOpenAiPresetId)
@@ -145,26 +146,26 @@ export function ImageGenerationSettings() {
     const updateOpenAiPreset = useCallback((patch: Partial<OpenAiImagePreset>) => {
         const nextPresets = openaiPresets.map(preset => preset.id === activeOpenAiPresetId ? { ...preset, ...patch } : preset);
         const active = nextPresets.find(preset => preset.id === activeOpenAiPresetId) || nextPresets[0];
-        persist({ ...settings, openaiPresets: nextPresets, activeOpenAiPresetId, requestMode: active.requestMode, apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model, size: active.size, quality: active.quality, extraPrompt: active.extraPrompt });
+        persist({ ...settings, openaiPresets: nextPresets, activeOpenAiPresetId, requestMode: active.requestMode, apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model, size: active.size, quality: active.quality, extraPrompt: active.extraPrompt, negativePrompt: active.negativePrompt || "" });
     }, [activeOpenAiPresetId, openaiPresets, persist, settings]);
 
     const addOpenAiPreset = useCallback(() => {
         const newId = `preset_openai_${Date.now()}`;
         const newPreset = { ...activeOpenAiPreset, id: newId, name: `${activeOpenAiPreset.name || "默认方案"}（副本）` };
-        persist({ ...settings, openaiPresets: [...openaiPresets, newPreset], activeOpenAiPresetId: newId, requestMode: newPreset.requestMode, apiKey: newPreset.apiKey, baseUrl: newPreset.baseUrl, model: newPreset.model, size: newPreset.size, quality: newPreset.quality, extraPrompt: newPreset.extraPrompt });
+        persist({ ...settings, openaiPresets: [...openaiPresets, newPreset], activeOpenAiPresetId: newId, requestMode: newPreset.requestMode, apiKey: newPreset.apiKey, baseUrl: newPreset.baseUrl, model: newPreset.model, size: newPreset.size, quality: newPreset.quality, extraPrompt: newPreset.extraPrompt, negativePrompt: newPreset.negativePrompt || "" });
     }, [activeOpenAiPreset, openaiPresets, persist, settings]);
 
     const deleteOpenAiPreset = useCallback(() => {
         if (openaiPresets.length <= 1) return;
         const next = openaiPresets.filter(preset => preset.id !== activeOpenAiPresetId);
         const active = next[0];
-        persist({ ...settings, openaiPresets: next, activeOpenAiPresetId: active.id, requestMode: active.requestMode, apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model, size: active.size, quality: active.quality, extraPrompt: active.extraPrompt });
+        persist({ ...settings, openaiPresets: next, activeOpenAiPresetId: active.id, requestMode: active.requestMode, apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model, size: active.size, quality: active.quality, extraPrompt: active.extraPrompt, negativePrompt: active.negativePrompt || "" });
     }, [activeOpenAiPresetId, openaiPresets, persist, settings]);
 
     const selectOpenAiPreset = useCallback((id: string) => {
         const active = openaiPresets.find(preset => preset.id === id);
         if (!active) return;
-        persist({ ...settings, activeOpenAiPresetId: id, requestMode: active.requestMode, apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model, size: active.size, quality: active.quality, extraPrompt: active.extraPrompt });
+        persist({ ...settings, activeOpenAiPresetId: id, requestMode: active.requestMode, apiKey: active.apiKey, baseUrl: active.baseUrl, model: active.model, size: active.size, quality: active.quality, extraPrompt: active.extraPrompt, negativePrompt: active.negativePrompt || "" });
     }, [openaiPresets, persist, settings]);
 
     // NovelAI 预设管理与状态
@@ -726,6 +727,19 @@ export function ImageGenerationSettings() {
                             />
                             <p className="menu-desc ml-1 opacity-70">
                                 选择尺寸后会自动在末尾追加一句「{RATIO_HINT_MARKER}…」构图提示，用于纠正部分不认 size 参数的接口（如 gpt-image-2）。可手动修改或删除。
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                            <label className="menu-desc ml-1">负面提示词 (Negative Prompt)</label>
+                            <Textarea
+                                value={activeOpenAiPreset.negativePrompt || ""}
+                                onChange={(event) => updateOpenAiPreset({ negativePrompt: event.target.value })}
+                                placeholder="如：low quality, worst quality, bad anatomy, deformed, blurry, extra limbs..."
+                                rows={3}
+                            />
+                            <p className="menu-desc ml-1 opacity-70">
+                                适用于支持负向提示词的中转接口或 SD / Flux 等模型；生图时会自动传递 negative_prompt 参数。
                             </p>
                         </div>
                     </>

@@ -336,12 +336,17 @@ async function generateImageDirect(params: {
   if (proxyBaseUrl) headers["x-upstream-base-url"] = normalizeBaseUrl(settings.baseUrl);
   let body: BodyInit;
 
+  const negativePrompt = settings.negativePrompt?.trim();
   if (hasReference) {
     const converted = dataUrlToBlob(referenceImageDataUrl || "");
     if (!converted) throw new Error("参考图格式无效");
     const form = new FormData();
     form.set("model", settings.model);
     form.set("prompt", prompt);
+    if (negativePrompt) {
+      form.set("negative_prompt", negativePrompt);
+      form.set("negativePrompt", negativePrompt);
+    }
     if (settings.size && settings.size !== "auto") form.set("size", settings.size);
     if (settings.quality && settings.quality !== "auto") form.set("quality", settings.quality);
     form.append("image", converted.blob, `reference.${imageExtension(converted.mimeType)}`);
@@ -351,6 +356,7 @@ async function generateImageDirect(params: {
     body = JSON.stringify({
       model: settings.model,
       prompt,
+      ...(negativePrompt ? { negative_prompt: negativePrompt, negativePrompt } : {}),
       ...(settings.size && settings.size !== "auto" ? { size: settings.size } : {}),
       ...(settings.quality && settings.quality !== "auto" ? { quality: settings.quality } : {}),
     });
@@ -449,6 +455,7 @@ async function generateImageViaServer(params: {
         prompt,
         size: settings.size,
         quality: settings.quality,
+        negativePrompt: settings.negativePrompt?.trim() || undefined,
         referenceImageDataUrl: referenceImageDataUrl || undefined,
       }),
     });

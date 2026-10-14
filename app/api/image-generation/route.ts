@@ -312,12 +312,17 @@ async function runImageGeneration(input: ImageGenerationRequest): Promise<{ stat
     const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
     let body: BodyInit;
 
+    const negativePrompt = input.negativePrompt?.trim();
     if (hasReference) {
       const converted = dataUrlToBlob(input.referenceImageDataUrl || "");
       if (!converted) return { status: 400, body: { error: "参考图格式无效" } };
       const form = new FormData();
       form.set("model", model);
       form.set("prompt", prompt);
+      if (negativePrompt) {
+        form.set("negative_prompt", negativePrompt);
+        form.set("negativePrompt", negativePrompt);
+      }
       if (input.size && input.size !== "auto") form.set("size", input.size);
       if (input.quality && input.quality !== "auto") form.set("quality", input.quality);
       form.append("image", converted.blob, `reference.${converted.mimeType.split("/")[1] || "png"}`);
@@ -327,6 +332,7 @@ async function runImageGeneration(input: ImageGenerationRequest): Promise<{ stat
       body = JSON.stringify({
         model,
         prompt,
+        ...(negativePrompt ? { negative_prompt: negativePrompt, negativePrompt } : {}),
         ...(input.size && input.size !== "auto" ? { size: input.size } : {}),
         ...(input.quality && input.quality !== "auto" ? { quality: input.quality } : {}),
       });

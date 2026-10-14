@@ -693,6 +693,7 @@ export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
     size: "1024x1024",
     quality: "auto",
     extraPrompt: "",
+    negativePrompt: "",
     novelai: {
         apiKey: "",
         activePresetId: DEFAULT_NOVELAI_PRESET.id,
@@ -738,6 +739,7 @@ function normalizeOpenAiPreset(preset: Partial<OpenAiImagePreset> | null | undef
         size: typeof preset?.size === "string" ? preset.size : DEFAULT_IMAGE_GENERATION_SETTINGS.size,
         quality: typeof preset?.quality === "string" ? preset.quality : DEFAULT_IMAGE_GENERATION_SETTINGS.quality,
         extraPrompt: typeof preset?.extraPrompt === "string" ? preset.extraPrompt : "",
+        negativePrompt: typeof preset?.negativePrompt === "string" ? preset.negativePrompt : "",
     };
 }
 
@@ -806,6 +808,7 @@ function normalizeImageGenerationSettings(settings: Partial<ImageGenerationSetti
         size: activeOpenAiPreset.size,
         quality: activeOpenAiPreset.quality,
         extraPrompt: activeOpenAiPreset.extraPrompt,
+        negativePrompt: activeOpenAiPreset.negativePrompt || "",
         openaiPresets,
         activeOpenAiPresetId,
         novelai,
