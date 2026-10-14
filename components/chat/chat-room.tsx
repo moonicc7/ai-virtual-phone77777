@@ -5589,7 +5589,12 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                             text={offlineDisplay.assistantContent}
                                             defaultExpanded={session.collapseBilingualTranslation !== false ? false : true}
                                             onActionSelect={(text) => {
-                                                offlineTextInputRef.current?.appendText(text);
+                                                const current = offlineTextInputRef.current;
+                                                if (!current) return;
+                                                // 如果输入框内容已经完全相同，直接忽略，避免手滑连点重复触发
+                                                if (inputTextRef.current === text) return;
+                                                // 覆盖设置文本并聚焦
+                                                current.setText(text);
                                             }}
                                         />
                                     </div>
