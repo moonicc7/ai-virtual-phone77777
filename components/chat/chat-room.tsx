@@ -6045,7 +6045,17 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                                     setMessages(prev => [...prev, sysMsg]);
                                                 }}
                                                 onMusicPlay={handleMusicCardPlay}
-                                                onActionSelect={(text) => chatTextInputRef.current?.appendText(text)}
+                                                onActionSelect={(text) => {
+                                                    const target = text.trim();
+                                                    if (offlineMode) {
+                                                        const current = offlineTextInputRef.current;
+                                                        if (!current) return;
+                                                        if (current.getText().trim() === target) return;
+                                                        current.setText(target);
+                                                    } else {
+                                                        chatTextInputRef.current?.appendText(text);
+                                                    }
+                                                }}
                                                 defaultTranslationExpanded={session.collapseBilingualTranslation !== false ? false : true}
                                             />
                                         </div>
