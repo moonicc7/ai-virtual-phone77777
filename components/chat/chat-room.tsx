@@ -497,6 +497,7 @@ type ChatTextInputHandle = {
 type OfflineTextInputHandle = {
     clear: () => void;
     setText: (text: string) => void;
+    getText: () => string;
     restoreIfEmpty: (text: string) => void;
 };
 
@@ -979,6 +980,7 @@ const OfflineTextInputBar = memo(forwardRef<OfflineTextInputHandle, {
             resetTextareaHeight();
         },
         setText: setTextAndResize,
+        getText: () => inputTextRef.current,
         appendText,
         restoreIfEmpty: (text: string) => {
             if (inputTextRef.current.trim()) return;
@@ -5591,10 +5593,10 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                                             onActionSelect={(text) => {
                                                 const current = offlineTextInputRef.current;
                                                 if (!current) return;
-                                                // 如果输入框内容已经完全相同，直接忽略，避免手滑连点重复触发
-                                                if (inputTextRef.current === text) return;
-                                                // 覆盖设置文本并聚焦
-                                                current.setText(text);
+                                                const currentVal = current.getText().trim();
+                                                const targetVal = text.trim();
+                                                if (currentVal === targetVal) return;
+                                                current.setText(targetVal);
                                             }}
                                         />
                                     </div>
