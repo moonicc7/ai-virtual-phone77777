@@ -8041,6 +8041,105 @@ function diagnoseWeiboNormalizeFailure(payload: unknown): string {
   return "结构存在字段缺失、枚举非法或重复 id";
 }
 
+export async function triggerCheckPhoneAppRefresh(
+  characterId: string,
+  appId: CheckPhoneAppId,
+): Promise<boolean> {
+  try {
+    const existing = await loadPhoneSnapshot(characterId, appId);
+    let result: { payload: any; summary?: string; error?: string } = { payload: null };
+
+    switch (appId) {
+      case "chat":
+        result = await generateCheckPhoneChat(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "phone":
+        result = await generateCheckPhonePhone(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "notes":
+        result = await generateCheckPhoneNotes(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "shopping":
+        result = await generateCheckPhoneShopping(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "assets":
+        result = await generateCheckPhoneAssets(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "photos":
+        result = await generateCheckPhonePhotos(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "browser":
+        result = await generateCheckPhoneBrowser(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "messages":
+        result = await generateCheckPhoneMessages(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "music":
+        result = await generateCheckPhoneMusic(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "reading":
+        result = await generateCheckPhoneReading(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "weibo":
+        result = await generateCheckPhoneWeibo(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "xiaohongshu":
+        result = await generateCheckPhoneXiaohongshu(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "email":
+        result = await generateCheckPhoneEmail(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "douyin":
+        result = await generateCheckPhoneDouyin(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "takeout":
+        result = await generateCheckPhoneTakeout(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "telegram":
+        result = await generateCheckPhoneTelegram(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "steam":
+        result = await generateCheckPhoneSteam(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "x":
+        result = await generateCheckPhoneX(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "reddit":
+        result = await generateCheckPhoneReddit(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "youtube":
+        result = await generateCheckPhoneYoutube(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "instagram":
+        result = await generateCheckPhoneInstagram(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "bilibili":
+        result = await generateCheckPhoneBilibili(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+      case "douban":
+        result = await generateCheckPhoneDouban(characterId, existing?.payload as any, existing?.updatedAt);
+        break;
+    }
+
+    if (result.payload) {
+      const now = new Date().toISOString();
+      await savePhoneSnapshot({
+        id: `${characterId}:${appId}`,
+        characterId,
+        appId,
+        generatedAt: existing?.generatedAt ?? now,
+        updatedAt: now,
+        summary: result.summary,
+        payload: result.payload,
+      });
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function generateCheckPhoneReading(
   characterId: string,
   previousPayload?: CheckPhoneReadingPayload | null,

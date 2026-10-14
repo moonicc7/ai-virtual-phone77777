@@ -36,7 +36,10 @@ import {
   Heart,
   ChevronRight,
   Languages,
-  History
+  History,
+  Layers,
+  CheckSquare,
+  Square
 } from "lucide-react";
 import { PageShell } from "@/components/ui/page-shell";
 import { ConfirmDialog, Toggle } from "@/components/ui";
@@ -72,7 +75,7 @@ import {
   type CheckPhoneAppId,
   type CheckPhoneManifest,
 } from "@/lib/checkphone-config";
-import { generateCheckPhoneManifest } from "@/lib/checkphone-engine";
+import { generateCheckPhoneManifest, triggerCheckPhoneAppRefresh } from "@/lib/checkphone-engine";
 import {
   clearPhoneManifest,
   loadPhoneManifest,
@@ -346,6 +349,9 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
   const [confirmClearHistoryCharId, setConfirmClearHistoryCharId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [promptEditorOpen, setPromptEditorOpen] = useState(false);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchSelectedApps, setBatchSelectedApps] = useState<CheckPhoneAppId[]>([]);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; appName: string } | null>(null);
   const [promptDraft, setPromptDraft] = useState(DEFAULT_CHECKPHONE_BILINGUAL_PROMPT);
   const [checkPhoneSettings, setCheckPhoneSettings] = useState<CheckPhoneSettings>({
     bilingualTranslationEnabled: true,
@@ -568,6 +574,34 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
 
   const topApps = sanitizeCheckPhoneAppIds(manifest?.topAppIds);
   const dockApps = sanitizeCheckPhoneAppIds(manifest?.dockAppIds);
+  const desktopApps = useMemo(() => Array.from(new Set([...topApps, ...dockApps])), [topApps, dockApps]);
+
+  const toggleBatchApp = (id: CheckPhoneAppId) => {
+    setBatchSelectedApps((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllDesktop = () => {
+    setBatchSelectedApps(desktopApps);
+  };
+
+  const handleSelectNone = () => {
+    setBatchSelectedApps([]);
+  };
+
+  const handleStartBatchGenerate = async () => {
+    if (!activeCharId || batchSelectedApps.length === 0 || batchProgress) return;
+    const total = batchSelectedApps.length;
+    for (let i = 0; i < total; i++) {
+      const appId = batchSelectedApps[i];
+      const spec = CHECKPHONE_APP_SPECS[appId];
+      setBatchProgress({ current: i + 1, total, appName: spec?.label || appId });
+      await triggerCheckPhoneAppRefresh(activeCharId, appId);
+    }
+    setBatchProgress(null);
+    setBatchModalOpen(false);
+  };
   const selectedAppSpec = selectedAppId && isCheckPhoneAppId(selectedAppId) ? CHECKPHONE_APP_SPECS[selectedAppId] : null;
 
   // STAGE 2: PURE FULLSCREEN IMMERSIVE SIMULATOR
@@ -635,14 +669,28 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
               </div>
 
               <div className="cp-floating-actions">
-                <button className="cp-float-refresh" onClick={handleGenerate} aria-label="Refresh Signal" disabled={!!activeState?.loading}>
+                {manifest && (
+                  <button
+                    className="cp-float-refresh"
+                    onClick={() => {
+                      setBatchSelectedApps(desktopApps);
+                      setBatchModalOpen(true);
+                    }}
+                    aria-label="批量生成 App 内容"
+                    title="批量生成"
+                    disabled={!!activeState?.loading || !!batchProgress}
+                  >
+                    <Layers size={18} strokeWidth={2.2} />
+                  </button>
+                )}
+                <button className="cp-float-refresh" onClick={handleGenerate} aria-label="Refresh Signal" disabled={!!activeState?.loading || !!batchProgress}>
                   <RefreshCw size={18} strokeWidth={2.5} className={activeState?.loading ? "cp-spin" : undefined} />
                 </button>
                 <button
                   className="cp-float-clear"
                   onClick={() => setConfirmClearOpen(true)}
                   aria-label="Clear current desktop"
-                  disabled={!!activeState?.loading || !manifest}
+                  disabled={!!activeState?.loading || !manifest || !!batchProgress}
                 >
                   <Trash2 size={17} strokeWidth={2.25} />
                 </button>
@@ -918,6 +966,107 @@ export function CheckPhoneApp({ onClose }: CheckPhoneAppProps) {
             onConfirm={handleClearManifest}
             onCancel={() => setConfirmClearOpen(false)}
           />
+        )}
+        {batchModalOpen && (
+          <div
+            className="cp-prompt-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="批量生成 App 内容"
+            onClick={() => {
+              if (!batchProgress) setBatchModalOpen(false);
+            }}
+          >
+            <div className="cp-prompt-modal cp-batch-modal" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 420 }}>
+              <div className="cp-prompt-modal-head">
+                <div>
+                  <h3>批量生成 APP 内容</h3>
+                  <p>勾选需要生成的应用，自动在后台依次完成生成。</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (batchSelectedApps.length === desktopApps.length) {
+                      handleSelectNone();
+                    } else {
+                      handleSelectAllDesktop();
+                    }
+                  }}
+                  disabled={!!batchProgress}
+                >
+                  {batchSelectedApps.length === desktopApps.length ? "取消全选" : "全选桌面"}
+                </button>
+              </div>
+
+              {batchProgress ? (
+                <div style={{ padding: "20px 0", textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                    正在生成：{batchProgress.appName} ({batchProgress.current} / {batchProgress.total})
+                  </div>
+                  <div style={{ height: 6, background: "rgba(0,0,0,0.08)", borderRadius: 3, overflow: "hidden", margin: "12px 0" }}>
+                    <div
+                      style={{
+                        height: "100%",
+                        background: "#111",
+                        width: `${(batchProgress.current / batchProgress.total) * 100}%`,
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 12, color: "#888" }}>正在自动排队处理，请勿关闭窗口</div>
+                </div>
+              ) : (
+                <div style={{ maxHeight: "320px", overflowY: "auto", margin: "12px 0", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  {desktopApps.map((appId) => {
+                    const spec = CHECKPHONE_APP_SPECS[appId];
+                    const selected = batchSelectedApps.includes(appId);
+                    return (
+                      <button
+                        key={appId}
+                        type="button"
+                        onClick={() => toggleBatchApp(appId)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          border: selected ? "1.5px solid #111" : "1px solid rgba(0,0,0,0.1)",
+                          background: selected ? "rgba(0,0,0,0.04)" : "#fff",
+                          cursor: "pointer",
+                          textAlign: "left",
+                        }}
+                      >
+                        {selected ? <CheckSquare size={16} color="#111" /> : <Square size={16} color="#aaa" />}
+                        <span style={{ fontSize: 13, fontWeight: selected ? 600 : 400, color: selected ? "#111" : "#555" }}>
+                          {spec?.label || appId}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="cp-prompt-modal-actions">
+                <button
+                  type="button"
+                  onClick={() => setBatchModalOpen(false)}
+                  disabled={!!batchProgress}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartBatchGenerate}
+                  disabled={!!batchProgress || batchSelectedApps.length === 0}
+                  className="ui-btn ui-btn-primary"
+                  style={{ background: "#111", color: "#fff", padding: "8px 16px", borderRadius: 8 }}
+                >
+                  {batchProgress ? "正在批量生成..." : `开始批量生成 (${batchSelectedApps.length})`}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
         {promptEditorOpen && (
           <div
