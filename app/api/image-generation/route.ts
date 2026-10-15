@@ -206,9 +206,126 @@ async function runNovelAiGeneration(input: ImageGenerationRequest): Promise<{ st
       return { status: 400, body: { error: "不支持的 NovelAI 调度器" } };
     }
 
+    const customBase = input.baseUrl?.trim().replace(/\/+$/, "");
+
+    // 判断是否为类似 nai.sta1n.cn 的 Web 任务协议网关
+    const isWebJobsGateway = Boolean(customBase && /\/api\/(?:web\/)?jobs/i.test(customBase) || customBase?.includes("sta1n.cn"));
+
+    if (isWebJobsGateway) {
+      const origin = customBase!.replace(/\/api\/(?:web\/)?jobs.*$/i, "");
+      const submitUrl = `${origin}/api/web/jobs`;
+      const queryJobsBase = `${origin}/api/jobs`;
+
+      // 尺寸参数映射
+      let sizeLabel = "竖图";
+      if (input.size?.includes("x")) {
+        const [w, h] = input.size.split("x").map(Number);
+        if (w === h) sizeLabel = "方图";
+        else if (w > h) sizeLabel = "横图";
+      }
+
+      const submitBody = JSON.stringify({
+        token: apiKey,
+        tag: prompt,
+        model,
+        size: sizeLabel,
+        cost: 1,
+        steps: normalizeNovelAiSteps(input.steps),
+        scale: normalizeNovelAiScale(input.scale),
+        cfg: 0,
+        sampler: normalizeNovelAiSampler(input.sampler),
+        negative: input.negativePrompt || "",
+        nocache: "1",
+        noise_schedule: normalizeNovelAiNoiseSchedule(input.noiseSchedule),
+      });
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000);
+      try {
+        const postRes = await externalFetch(submitUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Referer": `${origin}/`,
+            "x-user-token": apiKey,
+          },
+          body: submitBody,
+          signal: controller.signal,
+        });
+
+        if (!postRes.ok) {
+          const errText = await postRes.text().catch(() => "");
+          return { status: 502, body: { error: `创建生图任务失败 ${postRes.status}: ${errText.slice(0, 300)}` } };
+        }
+
+        const postJson = await postRes.json() as { id?: string; error?: string };
+        const jobId = postJson.id;
+        if (!jobId) {
+          return { status: 502, body: { error: postJson.error || "任务创建失败：未返回 jobId" } };
+        }
+
+        // 轮询等待出图 (最多等待 90 秒，每 2 秒一次)
+        const pollUrl = `${queryJobsBase}/${jobId}`;
+        let imageUrl = "";
+        for (let i = 0; i < 45; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          if (controller.signal.aborted) break;
+
+          const pollRes = await externalFetch(pollUrl, {
+            method: "GET",
+            headers: {
+              "x-user-token": apiKey,
+              "Referer": `${origin}/`,
+            },
+            signal: controller.signal,
+          });
+
+          if (!pollRes.ok) continue;
+          const jobData = await pollRes.json() as { status?: string; imageUrl?: string; error?: string };
+          if (jobData.status === "done" && jobData.imageUrl) {
+            imageUrl = jobData.imageUrl;
+            break;
+          }
+          if (jobData.status === "failed" || jobData.error) {
+            return { status: 502, body: { error: `生图任务执行失败: ${jobData.error || "未知原因"}` } };
+          }
+        }
+
+        if (!imageUrl) {
+          return { status: 504, body: { error: "生图超时：任务未在预期时间内完成" } };
+        }
+
+        // 下载最终图片
+        const fullImageUrl = imageUrl.startsWith("http") ? imageUrl : `${origin}${imageUrl}`;
+        const imgRes = await externalFetch(fullImageUrl, {
+          method: "GET",
+          headers: {
+            "x-user-token": apiKey,
+            "Referer": `${origin}/`,
+          },
+          signal: controller.signal,
+        });
+
+        if (!imgRes.ok) {
+          return { status: 502, body: { error: `下载已生成的图片失败 ${imgRes.status}` } };
+        }
+
+        const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+        const imgContentType = imgRes.headers.get("content-type") || "image/png";
+        return {
+          status: 200,
+          body: {
+            b64: imgBuffer.toString("base64"),
+            mimeType: imgContentType,
+          },
+        };
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
     const { width, height } = getNovelAiResolution(input.size);
 
-    const customBase = input.baseUrl?.trim().replace(/\/+$/, "");
     const url = customBase
       ? (/\/ai\/generate-image$/i.test(customBase) ? customBase : `${customBase}/ai/generate-image`)
       : "https://image.novelai.net/ai/generate-image";
