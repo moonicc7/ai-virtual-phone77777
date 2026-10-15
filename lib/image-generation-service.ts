@@ -57,20 +57,40 @@ function mergePrompt(description: string, extraPrompt: string): string {
   return extra ? `${main}\n\n${extra}` : main;
 }
 
-const DANBOORU_TRANSLATE_INSTRUCTION = `You are a prompt engineer for anime diffusion models (NovelAI/Danbooru).
+function buildDanbooruTranslateInstruction(characterInfo?: { name?: string; gender?: string; features?: string }): string {
+  const genderContext = characterInfo?.gender ? `Character gender: ${characterInfo.gender}.` : "";
+  const nameContext = characterInfo?.name ? `Character name: ${characterInfo.name}.` : "";
+  const featuresContext = characterInfo?.features ? `Character appearance/persona summary: ${characterInfo.features}.` : "";
+  const contextBlock = [nameContext, genderContext, featuresContext].filter(Boolean).join(" ");
+
+  return `You are an expert prompt engineer for anime diffusion models (NovelAI/Danbooru).
 Convert the user's scene description into concise, comma-separated Danbooru-style English tags.
+${contextBlock ? `Context about the character in this photo: ${contextBlock}\n` : ""}
 Rules:
 1. Output ONLY the tags separated by commas. No explanations, no markdown, no quotes, no conversational filler.
-2. If subject isn't specified, assume "1girl, solo".
-3. Extract core visual elements: character features (hair, eyes, expression), clothing, pose, setting/background, lighting/atmosphere.
-4. Keep tags lowercase standard Danbooru tags (e.g. "smile, black hair, looking at viewer, sitting, cafe, window, sunlight").
+2. Character count and gender tags:
+   - If the character is male (man/boy/he/him), use "1boy, solo, male focus" (do NOT use 1girl).
+   - If female, use "1girl, solo".
+   - If multiple characters appear, use appropriate count (e.g. "1boy, 1girl" or "2boys").
+   - If subject's gender is completely unknown and context gives no hint, default to the scene description cues.
+3. Extract core visual elements:
+   - Character features: hair color/style, eye color, expression, facial features.
+   - Clothing and accessories.
+   - Pose, action, gaze direction (e.g. "looking at viewer").
+   - Setting, background, lighting and atmosphere (e.g. "rain, night, neon lights, street").
+4. Keep tags as lowercase standard Danbooru tags (e.g. "1boy, solo, male focus, short hair, smile, standing, cafe, window, sunlight").
 5. Do not include meta quality tags like "masterpiece" or "best quality" (they will be added automatically).`;
+}
 
 /**
  * 如果输入包含中文字符，利用辅助 API 或全局默认 LLM 将中文自然语言转换为标准英文 Danbooru 标签。
  * 纯英文或翻译失败时优雅回退原文本。
  */
-async function translateToDanbooruTagsIfChinese(text: string, signal?: AbortSignal): Promise<string> {
+async function translateToDanbooruTagsIfChinese(
+  text: string,
+  characterId?: string,
+  signal?: AbortSignal,
+): Promise<string> {
   const trimmed = text.trim();
   if (!trimmed) return trimmed;
   // 检查是否包含汉字
@@ -83,11 +103,38 @@ async function translateToDanbooruTagsIfChinese(text: string, signal?: AbortSign
     return trimmed;
   }
 
+  // 提取角色人设中关于性别和外观的上下文，帮助翻译模型精准识别男女
+  let characterInfo: { name?: string; gender?: string; features?: string } | undefined;
+  if (characterId) {
+    try {
+      const { loadCharacters } = await import("./character-storage");
+      const char = loadCharacters().find(c => c.id === characterId);
+      if (char) {
+        const personaText = `${char.persona || ""} ${char.personality || ""}`.slice(0, 300);
+        let gender: string | undefined;
+        if (/男|少年|青年|大叔|先生|男性|小哥|男生|he|him|his|boy|man/i.test(personaText)) {
+          gender = "male (1boy)";
+        } else if (/女|少女|女性|小姐|姑娘|女生|she|her|girl|woman/i.test(personaText)) {
+          gender = "female (1girl)";
+        }
+        characterInfo = {
+          name: char.name,
+          gender,
+          features: personaText.slice(0, 150),
+        };
+      }
+    } catch {
+      // 忽略人设读取失败
+    }
+  }
+
+  const instruction = buildDanbooruTranslateInstruction(characterInfo);
+
   const controller = signal ? null : new AbortController();
   const timer = controller ? setTimeout(() => controller.abort(), 12_000) : null;
   try {
     const res = await simpleLLMCall(apiConfig, [
-      { role: "system", content: DANBOORU_TRANSLATE_INSTRUCTION },
+      { role: "system", content: instruction },
       { role: "user", content: trimmed },
     ], {
       temperature: 0.3,
@@ -817,8 +864,8 @@ export async function generateImageFromConfiguredApi(params: {
       : [DEFAULT_NOVELAI_PRESET];
     const activePreset = presets.find(p => p.id === settings.novelai?.activePresetId) || presets[0];
 
-    // 如果描述包含中文，自动借助已配置的 LLM 转为标准 Danbooru 英文 Tag
-    const processedDescription = await translateToDanbooruTagsIfChinese(description, params.signal);
+    // 如果描述包含中文，自动借助已配置的 LLM 转为标准 Danbooru 英文 Tag（附带角色性别与人设感知）
+    const processedDescription = await translateToDanbooruTagsIfChinese(description, params.characterId, params.signal);
     throwIfAborted(params.signal);
 
     const positiveParts: string[] = [];
