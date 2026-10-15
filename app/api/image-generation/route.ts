@@ -227,6 +227,7 @@ async function runNovelAiGeneration(input: ImageGenerationRequest): Promise<{ st
       const submitBody = JSON.stringify({
         token: apiKey,
         tag: prompt,
+        artist: "",
         model,
         size: sizeLabel,
         cost: 1,
