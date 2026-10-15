@@ -100,31 +100,38 @@ async function translateToDanbooruTagsIfChinese(
     return trimmed;
   }
 
-  const apiConfig = resolveAuxiliaryApiConfig("reasoningTranslateApiConfigId");
+  const apiConfig = resolveAuxiliaryApiConfig("reasoningTranslateApiConfigId")
+    || (typeof window !== "undefined" ? (await import("./settings-storage")).loadApiConfigs()[0] : null);
   if (!apiConfig) {
     return trimmed;
   }
 
-  // 提取角色人设中关于性别、体型、外貌特征、配饰的上下文
+  // 提取角色人设中关于性别、体型、外貌特征、配饰的完整上下文
   let characterInfo: { name?: string; gender?: string; appearance?: string } | undefined;
   if (characterId) {
     try {
       const { loadCharacters } = await import("./character-storage");
       const char = loadCharacters().find(c => c.id === characterId);
       if (char) {
-        const fullText = `${char.persona || ""} ${char.personality || ""}`;
+        const fullText = `${char.name} ${char.persona || ""} ${char.personality || ""}`;
         let gender: string | undefined;
-        if (/男|少年|青年|大叔|先生|男性|小哥|男生|he|him|his|boy|man/i.test(fullText)) {
-          gender = "male (1boy)";
-        } else if (/女|少女|女性|小姐|姑娘|女生|she|her|girl|woman/i.test(fullText)) {
-          gender = "female (1girl)";
+        // 增加对中英文全部代词（他/她/男/女/帅气/英俊等）的全面判定
+        const isMale = /(?:^|[^\u4e00-\u9fa5])(?:他|男|男性|男生|少年|青年|大叔|先生|男友|帅气|英俊|he|him|his|boy|man)(?:$|[^\u4e00-\u9fa5])/i.test(fullText)
+          || /性别\s*[:：]\s*男/i.test(fullText) || /【性别】\s*男/i.test(fullText) || /他/.test(char.persona || "");
+        const isFemale = /(?:^|[^\u4e00-\u9fa5])(?:她|女|女性|女生|少女|小姐|姑娘|女士|女友|漂亮|美丽|she|her|girl|woman)(?:$|[^\u4e00-\u9fa5])/i.test(fullText)
+          || /性别\s*[:：]\s*女/i.test(fullText) || /【性别】\s*女/i.test(fullText) || /她/.test(char.persona || "");
+
+        if (isMale && !isFemale) {
+          gender = "male (1boy, solo, male focus)";
+        } else if (isFemale && !isMale) {
+          gender = "female (1girl, solo)";
         }
 
-        // 提取外貌、身材、特征细节相关段落（放宽到 600 字符，保留泪痣、耳坠、发型等细节）
+        // 放宽到 1200 字符，让 LLM 获得最完整的容貌、泪痣、配饰、身材、衣着设定
         characterInfo = {
           name: char.name,
           gender,
-          appearance: fullText.slice(0, 600),
+          appearance: fullText.slice(0, 1200),
         };
       }
     } catch {
