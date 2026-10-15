@@ -1,5 +1,6 @@
 import type { ImageGenerationSettings, NovelAiPreset } from "./settings-types";
-import { loadImageGenerationSettings, DEFAULT_NOVELAI_PRESET } from "./settings-storage";
+import { loadImageGenerationSettings, DEFAULT_NOVELAI_PRESET, resolveAuxiliaryApiConfig } from "./settings-storage";
+import { simpleLLMCall } from "./api-helpers";
 import JSZip from "jszip";
 import { getChatImageFromIndexedDB } from "./chat-asset-storage";
 import { storeMediaBlob } from "./media-cache-storage";
@@ -54,6 +55,57 @@ function mergePrompt(description: string, extraPrompt: string): string {
   const main = description.trim();
   const extra = extraPrompt.trim();
   return extra ? `${main}\n\n${extra}` : main;
+}
+
+const DANBOORU_TRANSLATE_INSTRUCTION = `You are a prompt engineer for anime diffusion models (NovelAI/Danbooru).
+Convert the user's scene description into concise, comma-separated Danbooru-style English tags.
+Rules:
+1. Output ONLY the tags separated by commas. No explanations, no markdown, no quotes, no conversational filler.
+2. If subject isn't specified, assume "1girl, solo".
+3. Extract core visual elements: character features (hair, eyes, expression), clothing, pose, setting/background, lighting/atmosphere.
+4. Keep tags lowercase standard Danbooru tags (e.g. "smile, black hair, looking at viewer, sitting, cafe, window, sunlight").
+5. Do not include meta quality tags like "masterpiece" or "best quality" (they will be added automatically).`;
+
+/**
+ * 如果输入包含中文字符，利用辅助 API 或全局默认 LLM 将中文自然语言转换为标准英文 Danbooru 标签。
+ * 纯英文或翻译失败时优雅回退原文本。
+ */
+async function translateToDanbooruTagsIfChinese(text: string, signal?: AbortSignal): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  // 检查是否包含汉字
+  if (!/[\u4e00-\u9fa5]/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const apiConfig = resolveAuxiliaryApiConfig("reasoningTranslateApiConfigId");
+  if (!apiConfig) {
+    return trimmed;
+  }
+
+  const controller = signal ? null : new AbortController();
+  const timer = controller ? setTimeout(() => controller.abort(), 12_000) : null;
+  try {
+    const res = await simpleLLMCall(apiConfig, [
+      { role: "system", content: DANBOORU_TRANSLATE_INSTRUCTION },
+      { role: "user", content: trimmed },
+    ], {
+      temperature: 0.3,
+      signal: signal ?? controller?.signal,
+      label: "NovelAI Prompt Translation",
+    });
+
+    if (res.content?.trim()) {
+      // 简单清洗可能残留的前后缀
+      const cleaned = res.content.trim().replace(/^["']|["']$/g, "").replace(/^Tags:\s*/i, "");
+      return cleaned || trimmed;
+    }
+    return trimmed;
+  } catch {
+    return trimmed;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function base64ToBlob(b64: string, mimeType: string): Blob {
@@ -765,9 +817,13 @@ export async function generateImageFromConfiguredApi(params: {
       : [DEFAULT_NOVELAI_PRESET];
     const activePreset = presets.find(p => p.id === settings.novelai?.activePresetId) || presets[0];
 
+    // 如果描述包含中文，自动借助已配置的 LLM 转为标准 Danbooru 英文 Tag
+    const processedDescription = await translateToDanbooruTagsIfChinese(description, params.signal);
+    throwIfAborted(params.signal);
+
     const positiveParts: string[] = [];
     if (activePreset.positivePrompt?.trim()) positiveParts.push(activePreset.positivePrompt.trim());
-    if (description) positiveParts.push(description);
+    if (processedDescription) positiveParts.push(processedDescription);
     const fullPrompt = positiveParts.join(", ");
 
     const naiBaseUrl = settings.novelai?.baseUrl?.trim() || undefined;
