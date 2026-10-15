@@ -793,6 +793,7 @@ function normalizeImageGenerationSettings(settings: Partial<ImageGenerationSetti
 
     const novelai: import("./settings-types").NovelAiSettings = {
         apiKey: typeof rawNai?.apiKey === "string" ? rawNai.apiKey : "",
+        baseUrl: typeof rawNai?.baseUrl === "string" ? rawNai.baseUrl : "",
         activePresetId,
         presets: naiPresets,
     };

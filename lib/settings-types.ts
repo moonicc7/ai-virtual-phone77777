@@ -223,6 +223,7 @@ export type NovelAiPreset = {
 
 export type NovelAiSettings = {
     apiKey: string;
+    baseUrl?: string;
     activePresetId: string;
     presets: NovelAiPreset[];
 };
