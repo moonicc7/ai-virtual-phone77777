@@ -57,29 +57,31 @@ function mergePrompt(description: string, extraPrompt: string): string {
   return extra ? `${main}\n\n${extra}` : main;
 }
 
-function buildDanbooruTranslateInstruction(characterInfo?: { name?: string; gender?: string; features?: string }): string {
+function buildDanbooruTranslateInstruction(characterInfo?: { name?: string; gender?: string; appearance?: string }): string {
   const genderContext = characterInfo?.gender ? `Character gender: ${characterInfo.gender}.` : "";
   const nameContext = characterInfo?.name ? `Character name: ${characterInfo.name}.` : "";
-  const featuresContext = characterInfo?.features ? `Character appearance/persona summary: ${characterInfo.features}.` : "";
-  const contextBlock = [nameContext, genderContext, featuresContext].filter(Boolean).join(" ");
+  const appearanceContext = characterInfo?.appearance ? `Character permanent appearance & body details: ${characterInfo.appearance}.` : "";
+  const contextBlock = [nameContext, genderContext, appearanceContext].filter(Boolean).join("\n");
 
-  return `You are an expert prompt engineer for anime diffusion models (NovelAI/Danbooru).
-Convert the user's scene description into concise, comma-separated Danbooru-style English tags.
-${contextBlock ? `Context about the character in this photo: ${contextBlock}\n` : ""}
+  return `You are an expert anime prompt engineer specialized in NovelAI and Danbooru tags.
+Convert the user's scene description into accurate, comma-separated Danbooru-style English tags.
+${contextBlock ? `\n[Character Baseline Appearance Profile]\n${contextBlock}\n` : ""}
 Rules:
-1. Output ONLY the tags separated by commas. No explanations, no markdown, no quotes, no conversational filler.
-2. Character count and gender tags:
-   - If the character is male (man/boy/he/him), use "1boy, solo, male focus" (do NOT use 1girl).
-   - If female, use "1girl, solo".
-   - If multiple characters appear, use appropriate count (e.g. "1boy, 1girl" or "2boys").
-   - If subject's gender is completely unknown and context gives no hint, default to the scene description cues.
-3. Extract core visual elements:
-   - Character features: hair color/style, eye color, expression, facial features.
-   - Clothing and accessories.
-   - Pose, action, gaze direction (e.g. "looking at viewer").
-   - Setting, background, lighting and atmosphere (e.g. "rain, night, neon lights, street").
-4. Keep tags as lowercase standard Danbooru tags (e.g. "1boy, solo, male focus, short hair, smile, standing, cafe, window, sunlight").
-5. Do not include meta quality tags like "masterpiece" or "best quality" (they will be added automatically).`;
+1. Output ONLY the tags separated by commas. No conversational filler, no markdown, no quotes, no explanations.
+2. Subject & Gender:
+   - If character is male, use "1boy, solo, male focus" (NEVER use 1girl).
+   - If character is female, use "1girl, solo".
+3. Signature Features & Appearance Consistency (CRITICAL):
+   - Translate permanent character traits and accessories from the profile or scene into exact Danbooru tags:
+     * Facial marks: e.g. "mole under right eye", "mole under left eye", "mole under eye", "scar on face", "freckles"
+     * Ear/Jewelry: e.g. "earrings", "red earrings", "tassel earrings", "piercing", "necklace", "glasses", "choker"
+     * Body & Build: e.g. "tall", "muscular", "slender", "wide hips", "large breasts", "flat chest", "toned", "abs"
+     * Hair & Eyes: exact colors and styles (e.g. "silver hair, messy hair, low ponytail, blue eyes, sharp eyes")
+4. Scene & Dynamic State:
+   - Extract clothing, current pose, action, emotion/expression, background environment, weather and lighting.
+5. Formatting:
+   - Lowercase standard tags separated by commas (e.g. "1boy, solo, male focus, silver hair, blue eyes, mole under right eye, red earrings, black shirt, looking at viewer, night, rain").
+   - Do NOT include meta quality tags like "masterpiece" or "best quality".`;
 }
 
 /**
@@ -103,24 +105,26 @@ async function translateToDanbooruTagsIfChinese(
     return trimmed;
   }
 
-  // 提取角色人设中关于性别和外观的上下文，帮助翻译模型精准识别男女
-  let characterInfo: { name?: string; gender?: string; features?: string } | undefined;
+  // 提取角色人设中关于性别、体型、外貌特征、配饰的上下文
+  let characterInfo: { name?: string; gender?: string; appearance?: string } | undefined;
   if (characterId) {
     try {
       const { loadCharacters } = await import("./character-storage");
       const char = loadCharacters().find(c => c.id === characterId);
       if (char) {
-        const personaText = `${char.persona || ""} ${char.personality || ""}`.slice(0, 300);
+        const fullText = `${char.persona || ""} ${char.personality || ""}`;
         let gender: string | undefined;
-        if (/男|少年|青年|大叔|先生|男性|小哥|男生|he|him|his|boy|man/i.test(personaText)) {
+        if (/男|少年|青年|大叔|先生|男性|小哥|男生|he|him|his|boy|man/i.test(fullText)) {
           gender = "male (1boy)";
-        } else if (/女|少女|女性|小姐|姑娘|女生|she|her|girl|woman/i.test(personaText)) {
+        } else if (/女|少女|女性|小姐|姑娘|女生|she|her|girl|woman/i.test(fullText)) {
           gender = "female (1girl)";
         }
+
+        // 提取外貌、身材、特征细节相关段落（放宽到 600 字符，保留泪痣、耳坠、发型等细节）
         characterInfo = {
           name: char.name,
           gender,
-          features: personaText.slice(0, 150),
+          appearance: fullText.slice(0, 600),
         };
       }
     } catch {
