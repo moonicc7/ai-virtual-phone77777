@@ -224,6 +224,13 @@ async function runNovelAiGeneration(input: ImageGenerationRequest): Promise<{ st
         else if (w > h) sizeLabel = "横图";
       }
 
+      // 针对该 WebUI 网关专属采样的兼容转换：
+      // 官方 NAI 采样的 k_dpmpp_2m 在该网关上若对应 k_dpmpp_2m_sde 时最为稳定
+      let targetSampler = normalizeNovelAiSampler(input.sampler);
+      if (targetSampler === "k_dpmpp_2m") {
+        targetSampler = "k_dpmpp_2m_sde";
+      }
+
       const submitBody = JSON.stringify({
         token: apiKey,
         tag: prompt,
@@ -231,13 +238,13 @@ async function runNovelAiGeneration(input: ImageGenerationRequest): Promise<{ st
         model,
         size: sizeLabel,
         cost: 1,
-        steps: normalizeNovelAiSteps(input.steps),
-        scale: normalizeNovelAiScale(input.scale),
+        steps: Math.min(28, Math.max(20, normalizeNovelAiSteps(input.steps))),
+        scale: Math.min(7, Math.max(5, normalizeNovelAiScale(input.scale))),
         cfg: 0,
-        sampler: normalizeNovelAiSampler(input.sampler),
+        sampler: targetSampler,
         negative: input.negativePrompt || "",
         nocache: "1",
-        noise_schedule: normalizeNovelAiNoiseSchedule(input.noiseSchedule),
+        noise_schedule: normalizeNovelAiNoiseSchedule(input.noiseSchedule) || "karras",
       });
 
       const controller = new AbortController();
