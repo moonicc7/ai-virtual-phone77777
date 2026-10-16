@@ -700,6 +700,7 @@ export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
         presets: [DEFAULT_NOVELAI_PRESET],
     },
     characterReferences: {},
+    characterOverrides: {},
     imageHosting: {
         provider: "none",
         imgbbApiKey: "",
@@ -814,6 +815,7 @@ function normalizeImageGenerationSettings(settings: Partial<ImageGenerationSetti
         activeOpenAiPresetId,
         novelai,
         characterReferences: refs,
+        characterOverrides: (settings?.characterOverrides && typeof settings.characterOverrides === "object") ? settings.characterOverrides : {},
         imageHosting: {
             ...DEFAULT_IMAGE_GENERATION_SETTINGS.imageHosting,
             ...hosting,

@@ -892,8 +892,22 @@ export async function generateImageFromConfiguredApi(params: {
   const description = params.description.trim();
   if (!description) return null;
 
+  // 角色专属生图路由覆盖（按需绑定不同的提供方与预设）
+  const charOverride = params.characterId ? settings.characterOverrides?.[params.characterId] : undefined;
+  const effectiveProvider = charOverride?.provider || settings.provider || "openai";
+
   // NovelAI 模式
-  if (settings.provider === "novelai") {
+  if (effectiveProvider === "novelai") {
+    const naiApiKey = settings.novelai?.apiKey?.trim();
+    if (!naiApiKey) return null;
+
+    const presets = settings.novelai?.presets && settings.novelai.presets.length > 0
+      ? settings.novelai.presets
+      : [DEFAULT_NOVELAI_PRESET];
+    const targetPresetId = charOverride?.provider === "novelai" && charOverride.presetId
+      ? charOverride.presetId
+      : settings.novelai?.activePresetId;
+    const activePreset = presets.find(p => p.id === targetPresetId) || presets[0];
     const naiApiKey = settings.novelai?.apiKey?.trim();
     if (!naiApiKey) return null;
 
@@ -934,8 +948,12 @@ export async function generateImageFromConfiguredApi(params: {
     };
   }
 
-  // OpenAI 兼容模式：使用当前激活预设（旧配置由存储层迁移后仍保持兼容）
-  const openaiPreset = settings.openaiPresets?.find(preset => preset.id === settings.activeOpenAiPresetId)
+  // OpenAI 兼容模式：使用角色专属指定预设或全局激活预设
+  const targetOpenAiPresetId = charOverride?.provider === "openai" && charOverride.presetId
+    ? charOverride.presetId
+    : settings.activeOpenAiPresetId;
+  const openaiPreset = settings.openaiPresets?.find(preset => preset.id === targetOpenAiPresetId)
+    || settings.openaiPresets?.find(preset => preset.id === settings.activeOpenAiPresetId)
     || settings.openaiPresets?.[0];
   const openaiSettings = openaiPreset ? { ...settings, ...openaiPreset } : settings;
   if (!openaiSettings.apiKey.trim() || !openaiSettings.baseUrl.trim() || !openaiSettings.model.trim()) return null;

@@ -2518,7 +2518,7 @@ function CharArchiveView({
               {isEditing ? (
                 <AutoResizingTextarea
                   value={appearancePrompt}
-                  onChange={setAppearancePrompt}
+                  onChange={(val: string) => setAppearancePrompt(val)}
                   placeholder="例如：俊朗青年，黑色微卷短发，深灰眼眸，右眼角有一颗细小泪痣，左耳一枚黑色耳钉，修长身材，神色清冷…"
                   minHeight={60}
                   style={{

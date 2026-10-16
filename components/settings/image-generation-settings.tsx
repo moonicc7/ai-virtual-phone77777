@@ -958,6 +958,99 @@ export function ImageGenerationSettings() {
                 </div>
             )}
 
+            {/* 角色专属生图路由覆盖（按需给不同角色分配不同生图引擎或不同预设） */}
+            <div className="flex flex-col gap-2">
+                <p className="settings-menu-section-title">Character Image Preset Routing</p>
+                <div className="menu-group flex flex-col p-3 gap-3">
+                    <span className="menu-desc leading-[1.6]">
+                        为特定角色分配专属的生图引擎与预设。未单独设置的角色将自动跟随上方的「全局默认生图提供方与激活预设」。
+                    </span>
+
+                    {characters.length === 0 ? (
+                        <div className="ui-empty py-4 text-xs opacity-60">暂无角色</div>
+                    ) : (
+                        <div className="flex flex-col divide-y divide-[var(--c-card-border)]">
+                            {characters.map(character => {
+                                const override = settings.characterOverrides?.[character.id];
+                                const currentProvider = override?.provider || "default";
+                                const currentPresetId = override?.presetId || "";
+
+                                return (
+                                    <div key={character.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className="h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-[var(--c-input)] flex items-center justify-center">
+                                                {character.avatar ? (
+                                                    <img src={character.avatar} alt="" className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <span className="ts-12 font-semibold text-[var(--c-icon)]">{character.name.slice(0, 1)}</span>
+                                                )}
+                                            </span>
+                                            <span className="ts-13 font-medium truncate text-[var(--c-text-title)]">{character.name}</span>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            {/* 选择引擎 */}
+                                            <select
+                                                aria-label={`${character.name} 的生图引擎`}
+                                                className="ui-select text-xs !py-1 !px-2 rounded-lg bg-[var(--c-input)] border border-[var(--c-card-border)]"
+                                                value={currentProvider}
+                                                onChange={(e) => {
+                                                    const val = e.target.value as "default" | "openai" | "novelai";
+                                                    const nextOverrides = { ...(settings.characterOverrides || {}) };
+                                                    if (val === "default") {
+                                                        delete nextOverrides[character.id];
+                                                    } else {
+                                                        const firstPresetId = val === "novelai"
+                                                            ? (settings.novelai?.presets[0]?.id || "")
+                                                            : (settings.openaiPresets?.[0]?.id || "");
+                                                        nextOverrides[character.id] = {
+                                                            provider: val,
+                                                            presetId: firstPresetId,
+                                                        };
+                                                    }
+                                                    updateSettings({ characterOverrides: nextOverrides });
+                                                }}
+                                            >
+                                                <option value="default">跟随全局默认</option>
+                                                <option value="novelai">专属：NovelAI</option>
+                                                <option value="openai">专属：OpenAI (GPT/Flux)</option>
+                                            </select>
+
+                                            {/* 选择具体预设 */}
+                                            {currentProvider !== "default" && (
+                                                <select
+                                                    aria-label={`${character.name} 的专属预设`}
+                                                    className="ui-select text-xs !py-1 !px-2 rounded-lg bg-[var(--c-input)] border border-[var(--c-card-border)] max-w-[150px] truncate"
+                                                    value={currentPresetId}
+                                                    onChange={(e) => {
+                                                        const nextOverrides = { ...(settings.characterOverrides || {}) };
+                                                        nextOverrides[character.id] = {
+                                                            provider: currentProvider as "openai" | "novelai",
+                                                            presetId: e.target.value,
+                                                        };
+                                                        updateSettings({ characterOverrides: nextOverrides });
+                                                    }}
+                                                >
+                                                    {currentProvider === "novelai" ? (
+                                                        (settings.novelai?.presets || []).map(p => (
+                                                            <option key={p.id} value={p.id}>{p.name.trim() || "未命名 NAI 预设"}</option>
+                                                        ))
+                                                    ) : (
+                                                        (settings.openaiPresets || []).map(p => (
+                                                            <option key={p.id} value={p.id}>{p.name.trim() || "未命名 OpenAI 预设"}</option>
+                                                        ))
+                                                    )}
+                                                </select>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {pendingDeleteOpenAiPresetId && (
                 <ConfirmDialog
                     title="确认删除预设？"

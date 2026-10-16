@@ -248,6 +248,11 @@ export type ImageGenerationSettings = {
         assetId: string;
         updatedAt: number;
     }>;
+    // 角色专属生图路由覆盖（按需绑定不同的提供方与预设）
+    characterOverrides?: Record<string, {
+        provider?: ImageGenerationProvider;
+        presetId?: string;
+    }>;
     imageHosting: ImageHostingSettings;
 };
 
