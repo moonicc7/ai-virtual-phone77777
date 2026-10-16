@@ -142,21 +142,26 @@ async function translateToDanbooruTagsIfChinese(
   const instruction = buildDanbooruTranslateInstruction(characterInfo);
 
   const controller = signal ? null : new AbortController();
-  const timer = controller ? setTimeout(() => controller.abort(), 12_000) : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 20_000) : null;
   try {
     const res = await simpleLLMCall(apiConfig, [
       { role: "system", content: instruction },
-      { role: "user", content: trimmed },
+      { role: "user", content: `Translate this scene to Danbooru tags:\n"""\n${trimmed}\n"""` },
     ], {
-      temperature: 0.3,
+      temperature: 0.2,
       signal: signal ?? controller?.signal,
       label: "NovelAI Prompt Translation",
     });
 
     if (res.content?.trim()) {
-      // 简单清洗可能残留的前后缀
-      const cleaned = res.content.trim().replace(/^["']|["']$/g, "").replace(/^Tags:\s*/i, "");
-      return cleaned || trimmed;
+      let cleaned = res.content.trim();
+      cleaned = cleaned.replace(/^```[a-z]*\s*/i, "").replace(/```$/g, "").trim();
+      cleaned = cleaned.replace(/^(?:Danbooru\s+)?Tags\s*[:：]\s*/i, "");
+      cleaned = cleaned.replace(/^Output\s*[:：]\s*/i, "");
+      cleaned = cleaned.replace(/^["']|["']$/g, "").trim();
+      if (cleaned && !/[\u4e00-\u9fa5]/.test(cleaned)) {
+        return cleaned;
+      }
     }
     return trimmed;
   } catch {
@@ -880,8 +885,8 @@ export async function generateImageFromConfiguredApi(params: {
     throwIfAborted(params.signal);
 
     const positiveParts: string[] = [];
-    if (activePreset.positivePrompt?.trim()) positiveParts.push(activePreset.positivePrompt.trim());
     if (processedDescription) positiveParts.push(processedDescription);
+    if (activePreset.positivePrompt?.trim()) positiveParts.push(activePreset.positivePrompt.trim());
     const fullPrompt = positiveParts.join(", ");
 
     const naiBaseUrl = settings.novelai?.baseUrl?.trim() || undefined;
