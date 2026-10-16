@@ -63,25 +63,37 @@ function buildDanbooruTranslateInstruction(characterInfo?: { name?: string; gend
   const appearanceContext = characterInfo?.appearance ? `Character permanent appearance & body details: ${characterInfo.appearance}.` : "";
   const contextBlock = [nameContext, genderContext, appearanceContext].filter(Boolean).join("\n");
 
-  return `You are an expert anime prompt engineer specialized in NovelAI and Danbooru tags.
-Convert the user's scene description into accurate, comma-separated Danbooru-style English tags.
+  return `You are a master anime prompt engineer specialized in NovelAI Diffusion and Danbooru tagging.
+Your mission is to faithfully deconstruct every single visual element, emotional nuance, and atmospheric detail from the user's Chinese scene description into comprehensive, high-fidelity Danbooru tags.
 ${contextBlock ? `\n[Character Baseline Appearance Profile]\n${contextBlock}\n` : ""}
-Rules:
-1. Output ONLY the tags separated by commas. No conversational filler, no markdown, no quotes, no explanations.
-2. Subject & Gender:
-   - Unless explicitly specified as female/girl, ALWAYS default to male: use "1boy, solo, male focus" (NEVER output 1girl unless female is explicitly specified).
-   - If female, use "1girl, solo".
-3. Signature Features & Appearance Consistency (CRITICAL):
-   - Translate permanent character traits and accessories from the profile or scene into exact Danbooru tags:
-     * Facial marks: e.g. "mole under right eye", "mole under left eye", "mole under eye", "scar on face", "freckles"
-     * Ear/Jewelry: e.g. "earrings", "red earrings", "tassel earrings", "piercing", "necklace", "glasses", "choker"
-     * Body & Build: e.g. "tall", "muscular", "slender", "wide hips", "large breasts", "flat chest", "toned", "abs"
-     * Hair & Eyes: exact colors and styles (e.g. "silver hair, messy hair, low ponytail, blue eyes, sharp eyes")
-4. Scene & Dynamic State:
-   - Extract clothing, current pose, action, emotion/expression, background environment, weather and lighting.
-5. Formatting:
-   - Lowercase standard tags separated by commas (e.g. "1boy, solo, male focus, silver hair, blue eyes, mole under right eye, red earrings, black shirt, looking at viewer, night, rain").
-   - Do NOT include meta quality tags like "masterpiece" or "best quality".`;
+Deconstruction Framework (Exhaustively analyze and translate ALL 6 dimensions):
+1. SUBJECT & FIXED TRAITS (HIGHEST PRIORITY - Put at the very beginning):
+   - Unless explicitly specified as female, ALWAYS default to male: use "1boy, solo, male focus". (Only output "1girl, solo" if female is explicitly stated).
+   - Anchor signature traits from character profile & scene:
+     * Facial marks: "mole under right eye", "mole under left eye", "scar on face", "freckles" (wrap critical features with curly braces like "{mole under right eye}" for emphasis if mentioned).
+     * Ear/Jewelry: "{red earrings}", "tassel earrings", "earrings", "piercing", "necklace", "ring", "glasses".
+     * Hair & Eyes: exact colors, length, and style (e.g. "silver hair, long hair, messy hair, low ponytail, blue eyes, sharp eyes").
+     * Physique & Build: "tall, broad shoulders, toned body, muscular, slender, handsome face".
+2. ATTIRE & ACCESSORIES:
+   - Detailed clothing items, colors, layers, and textures (e.g. "black trench coat, unbuttoned shirt, white collar, necktie, leather gloves, boots").
+3. POSE, ACTION & INTERACTION:
+   - Specific posture (e.g. "leaning against wall, leaning against glass window, sitting, standing, hands in pockets").
+   - Handheld items & active interactions (e.g. "holding transparent umbrella, holding coffee cup, touching chin").
+4. EXPRESSION, MOOD & GAZE:
+   - Micro-expressions and emotional tone (e.g. "gentle smile, subtle smile, calm expression, weary eyes, melancholic, serious").
+   - Eye contact direction (default to "looking at viewer" if engaging, or "looking away, looking down").
+5. ENVIRONMENT, WEATHER & SCENE ELEMENTS:
+   - Specific location & indoor/outdoor setting (e.g. "city street, neon-lit street, storefront, convenience store window, cafe, bedroom").
+   - Weather & time of day (e.g. "rain, wet pavement, rainy night, night, sunset, dusk, falling rain, fog").
+   - Background details & reflections (e.g. "neon lights, colorful reflections on wet street, glowing storefront, bokeh, city lights").
+6. CINEMATOGRAPHY, LIGHTING & ATMOSPHERE:
+   - Cinematic lighting (e.g. "cinematic lighting, rim light, deep blue and amber lighting, soft ambient light, volumetric lighting, reflections").
+   - Camera framing & depth (e.g. "upper body, close-up, shallow depth of field, blurry background, moody atmosphere").
+
+STRICT OUTPUT RULES:
+- Output ONLY comma-separated English Danbooru tags.
+- NEVER output any Chinese characters, conversational filler, markdown codeblocks, or prefixes like "Tags:" or "Output:".
+- Ensure ALL vivid details from the Chinese prompt are preserved in English tags so no scene information is lost.`;
 }
 
 /**
@@ -889,9 +901,10 @@ export async function generateImageFromConfiguredApi(params: {
     const processedDescription = await translateToDanbooruTagsIfChinese(description, params.characterId, params.signal);
     throwIfAborted(params.signal);
 
+    // 确保角色特征与解构场景排在最前方，质量词排在后方作为加持；彻底清洗中文标点，避免分词器断裂
     const positiveParts: string[] = [];
-    if (processedDescription) positiveParts.push(processedDescription);
-    if (activePreset.positivePrompt?.trim()) positiveParts.push(activePreset.positivePrompt.trim());
+    if (processedDescription) positiveParts.push(processedDescription.replace(/，/g, ", ").replace(/。/g, " ").replace(/：/g, ": "));
+    if (activePreset.positivePrompt?.trim()) positiveParts.push(activePreset.positivePrompt.trim().replace(/，/g, ", ").replace(/。/g, " ").replace(/：/g, ": "));
     const fullPrompt = positiveParts.join(", ");
 
     const naiBaseUrl = settings.novelai?.baseUrl?.trim() || undefined;
