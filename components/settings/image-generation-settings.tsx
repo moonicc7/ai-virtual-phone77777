@@ -12,6 +12,7 @@ import {
 import { loadCharacters } from "@/lib/character-storage";
 import type { Character } from "@/lib/character-types";
 import { getChatImageFromIndexedDB, saveChatImageToIndexedDB } from "@/lib/chat-asset-storage";
+import { hydrateKvDb, isKvHydrated } from "@/lib/kv-db";
 import {
     fetchImageGenerationModels,
     fetchNovelAiModels,
@@ -99,16 +100,31 @@ export function ImageGenerationSettings() {
     useEffect(() => {
         // Sync the ratio hint to the saved size on load, so the hint is present
         // by default (not only after the user manually switches the size).
-        const loaded = loadImageGenerationSettings();
-        const syncedExtra = withRatioHint(loaded.extraPrompt, loaded.size);
-        if (syncedExtra !== loaded.extraPrompt) {
-            const next = { ...loaded, extraPrompt: syncedExtra };
-            saveImageGenerationSettings(next);
-            setSettings(next);
-        } else {
-            setSettings(loaded);
+        //
+        // 必须在 kv(IndexedDB) 水合完成之后再读写：水合前 loadImageGenerationSettings()
+        // 只能拿到默认值（novelai.baseUrl / apiKey 都是空的），此时若把「补比例提示」的
+        // 结果整份写回，就会把用户已保存的中转站地址和 Token 覆盖成空 —— 表现为过一会儿
+        // 地址栏自己变空。未水合时先等水合，再读取并同步。
+        let cancelled = false;
+        const apply = () => {
+            if (cancelled) return;
+            const loaded = loadImageGenerationSettings();
+            const syncedExtra = withRatioHint(loaded.extraPrompt, loaded.size);
+            if (syncedExtra !== loaded.extraPrompt) {
+                const next = { ...loaded, extraPrompt: syncedExtra };
+                saveImageGenerationSettings(next);
+                setSettings(next);
+            } else {
+                setSettings(loaded);
+            }
+            setCharacters(loadCharacters());
+        };
+        if (isKvHydrated()) {
+            apply();
+            return;
         }
-        setCharacters(loadCharacters());
+        hydrateKvDb().then(apply).catch(apply);
+        return () => { cancelled = true; };
     }, []);
 
     useEffect(() => {

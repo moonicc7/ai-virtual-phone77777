@@ -840,9 +840,43 @@ export function loadImageGenerationSettings(): ImageGenerationSettings {
     }
 }
 
+/**
+ * 某些代码路径在保存生图设置时会丢掉 novelai 的凭据字段（对象展开时漏写），
+ * 导致用户填好的中转站地址 / Token 被静默清空（表现为「地址栏自己变空」）。
+ * 这里在写入前做一次兜底：只在该字段「整个缺失」（undefined）时从已存配置里带回；
+ * 用户手动清空输入框得到的是空字符串 ""，属于有意为之，照常保存。
+ */
+function guardNovelAiCredentials(settings: ImageGenerationSettings): ImageGenerationSettings {
+    if (typeof window === "undefined") return settings;
+    try {
+        const raw = kvGet(IMAGE_GENERATION_SETTINGS_KEY);
+        if (!raw) return settings;
+        const stored = JSON.parse(raw) as Partial<ImageGenerationSettings>;
+        const storedNai = stored?.novelai;
+        if (!storedNai) return settings;
+
+        const incoming = settings?.novelai;
+        if (!incoming) {
+            // 整个 novelai 对象都被丢掉了：整体沿用已存配置（含预设与凭据）。
+            return { ...settings, novelai: storedNai };
+        }
+        const patch: { baseUrl?: string; apiKey?: string } = {};
+        if (typeof incoming.baseUrl !== "string" && typeof storedNai.baseUrl === "string" && storedNai.baseUrl) {
+            patch.baseUrl = storedNai.baseUrl;
+        }
+        if (typeof incoming.apiKey !== "string" && typeof storedNai.apiKey === "string" && storedNai.apiKey) {
+            patch.apiKey = storedNai.apiKey;
+        }
+        if (Object.keys(patch).length === 0) return settings;
+        return { ...settings, novelai: { ...incoming, ...patch } };
+    } catch {
+        return settings;
+    }
+}
+
 export function saveImageGenerationSettings(settings: ImageGenerationSettings): void {
     if (typeof window === "undefined") return;
-    kvSet(IMAGE_GENERATION_SETTINGS_KEY, JSON.stringify(normalizeImageGenerationSettings(settings)));
+    kvSet(IMAGE_GENERATION_SETTINGS_KEY, JSON.stringify(normalizeImageGenerationSettings(guardNovelAiCredentials(settings))));
     window.dispatchEvent(new CustomEvent("settings-image-generation-updated"));
 }
 
