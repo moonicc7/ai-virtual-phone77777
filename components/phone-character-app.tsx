@@ -1876,6 +1876,7 @@ function CharArchiveView({
   const [name, setName] = useState(char.name || "");
   const [persona, setPersona] = useState(char.persona || "");
   const [personality, setPersonality] = useState(char.personality || "");
+  const [appearancePrompt, setAppearancePrompt] = useState(char.appearancePrompt || "");
   const [briefPersona, setBriefPersona] = useState(char.briefPersona || "");
   const [briefBusy, setBriefBusy] = useState(false);
   const [briefError, setBriefError] = useState("");
@@ -1970,6 +1971,7 @@ function CharArchiveView({
     if (name !== (char.name || "")) return true;
     if (persona !== (char.persona || "")) return true;
     if (personality !== (char.personality || "")) return true;
+    if (appearancePrompt !== (char.appearancePrompt || "")) return true;
     if (briefPersona !== (char.briefPersona || "")) return true;
     if (timeZone !== (char.timeZone || "")) return true;
     if (avatar !== (char.avatar || null)) return true;
@@ -1996,6 +1998,7 @@ function CharArchiveView({
       setName(char.name || "");
       setPersona(char.persona || "");
       setPersonality(char.personality || "");
+      setAppearancePrompt(char.appearancePrompt || "");
       setBriefPersona(char.briefPersona || "");
       setBriefError("");
       setTimeZone(char.timeZone || "");
@@ -2060,6 +2063,7 @@ function CharArchiveView({
         name: name.trim() || char.name || "UNNAMED",
         persona,
         personality: personality.trim() || undefined,
+        appearancePrompt: appearancePrompt.trim() || undefined,
         briefPersona: trimmedBrief || undefined,
         // 简介变动才刷新时间戳；未动则保留原值（供「设定已更新」过期提示判断）
         briefPersonaUpdatedAt: trimmedBrief
@@ -2498,6 +2502,33 @@ function CharArchiveView({
                 />
               ) : (
                 <p className="char-archive-p whitespace-pre-wrap break-words">{personality}</p>
+              )}
+            </div>
+          )}
+
+          {/* 生图外貌描述（锁脸锚点）：支持中文或英文 Tag，自动随生图引擎适配 */}
+          {(isEditing || appearancePrompt.trim()) && (
+            <div className="char-log-entry mb-4 border-t border-dashed border-[#999] pt-3">
+              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                <span className="char-log-entry-header !mb-0">APPEARANCE PROMPT / 生图外貌描述（锁脸锚点）</span>
+              </div>
+              <p className="ts-10 opacity-60 mt-1">
+                写中文即可。发照片或朋友圈时自动注入：切到 GPT 原样保留中文细节；切到 NovelAI 自动深度提炼为英文 Danbooru 细节 Tag。
+              </p>
+              {isEditing ? (
+                <AutoResizingTextarea
+                  value={appearancePrompt}
+                  onChange={setAppearancePrompt}
+                  placeholder="例如：俊朗青年，黑色微卷短发，深灰眼眸，右眼角有一颗细小泪痣，左耳一枚黑色耳钉，修长身材，神色清冷…"
+                  minHeight={60}
+                  style={{
+                    width: "100%", background: "color-mix(in srgb, var(--c-input) 50%, transparent)",
+                    border: "1px dashed #666", padding: 8, fontSize: "calc(12px*var(--app-text-scale,1))", lineHeight: 1.5,
+                    fontFamily: "inherit", marginTop: 8
+                  }}
+                />
+              ) : (
+                <p className="char-archive-p whitespace-pre-wrap break-words">{appearancePrompt}</p>
               )}
             </div>
           )}

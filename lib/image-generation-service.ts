@@ -139,11 +139,16 @@ async function translateToDanbooruTagsIfChinese(
           gender = "female (1girl, solo)";
         }
 
-        // 放宽到 1200 字符，让 LLM 获得最完整的容貌、泪痣、配饰、身材、衣着设定
+        // 优先使用专属锁脸字段 appearancePrompt，未填时退回人设全文提取
+        const explicitAppearance = char.appearancePrompt?.trim();
+        const effectiveAppearance = explicitAppearance
+          ? `[Explicit Signature Appearance]: ${explicitAppearance}\n${fullText.slice(0, 800)}`
+          : fullText.slice(0, 1200);
+
         characterInfo = {
           name: char.name,
           gender,
-          appearance: fullText.slice(0, 1200),
+          appearance: effectiveAppearance,
         };
       }
     } catch {
@@ -944,7 +949,22 @@ export async function generateImageFromConfiguredApi(params: {
     ? await normalizeReferenceImageForEdit(rawReferenceImageDataUrl)
     : null;
   throwIfAborted(params.signal);
-  const prompt = mergePrompt(description, openaiSettings.extraPrompt);
+
+  // OpenAI 模式：如果角色配置了专属外貌描述（中文），自动前置融入 Prompt 中，达到锁脸一致性
+  let enhancedDescription = description;
+  if (params.characterId) {
+    try {
+      const { loadCharacters } = await import("./character-storage");
+      const char = loadCharacters().find(c => c.id === params.characterId);
+      if (char?.appearancePrompt?.trim()) {
+        enhancedDescription = `【人物外貌特征】：${char.appearancePrompt.trim()}\n【画面情境】：${description}`;
+      }
+    } catch {
+      // 忽略读取失败
+    }
+  }
+
+  const prompt = mergePrompt(enhancedDescription, openaiSettings.extraPrompt);
 
   const data = openaiSettings.requestMode === "direct"
     ? await generateImageDirect({ settings: openaiSettings, prompt, referenceImageDataUrl, signal: params.signal })
