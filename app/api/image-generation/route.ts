@@ -224,27 +224,25 @@ async function runNovelAiGeneration(input: ImageGenerationRequest): Promise<{ st
         else if (w > h) sizeLabel = "横图";
       }
 
-      // 针对该 WebUI 网关专属采样的兼容转换：
-      // 官方 NAI 采样的 k_dpmpp_2m 在该网关上若对应 k_dpmpp_2m_sde 时最为稳定
-      let targetSampler = normalizeNovelAiSampler(input.sampler);
-      if (targetSampler === "k_dpmpp_2m") {
-        targetSampler = "k_dpmpp_2m_sde";
-      }
+      // 针对该 WebUI 网关专属参数映射：
+      // 1. sampler: 该网页默认写死使用的是 k_dpmpp_2m_sde
+      // 2. negative: 若为空则赋予该网关默认的防坏手负面词，彻底消除潜空间噪点发散（花屏）
+      const defaultNegative = "{{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},mutated hands,{{{mutation}}},normal quality,poorly drawn face,poorly drawn hands,signature,text,{{too many fingers}},{{{ugly}}},username,watermark,worst quality";
 
       const submitBody = JSON.stringify({
         token: apiKey,
         tag: prompt,
         artist: "",
-        model,
+        model: model || "nai-diffusion-4-5-full",
         size: sizeLabel,
         cost: 1,
-        steps: Math.min(28, Math.max(20, normalizeNovelAiSteps(input.steps))),
-        scale: Math.min(7, Math.max(5, normalizeNovelAiScale(input.scale))),
+        steps: 28,
+        scale: 6,
         cfg: 0,
-        sampler: targetSampler,
-        negative: input.negativePrompt || "",
+        sampler: "k_dpmpp_2m_sde",
+        negative: input.negativePrompt?.trim() ? input.negativePrompt.trim() : defaultNegative,
         nocache: "1",
-        noise_schedule: normalizeNovelAiNoiseSchedule(input.noiseSchedule) || "karras",
+        noise_schedule: "karras",
       });
 
       const controller = new AbortController();
