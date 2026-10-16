@@ -229,9 +229,14 @@ async function runNovelAiGeneration(input: ImageGenerationRequest): Promise<{ st
       // 2. negative: 若为空则赋予该网关默认的防坏手负面词，彻底消除潜空间噪点发散（花屏）
       const defaultNegative = "{{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},mutated hands,{{{mutation}}},normal quality,poorly drawn face,poorly drawn hands,signature,text,{{too many fingers}},{{{ugly}}},username,watermark,worst quality";
 
+      // 彻底清洗 prompt 中的中文全角标点，避免分词器断裂
+      const cleanedTag = prompt.replace(/，/g, ", ").replace(/。/g, " ").replace(/：/g, ": ").trim();
+      const rawNeg = (input.negativePrompt?.trim() ? input.negativePrompt.trim() : defaultNegative)
+        .replace(/，/g, ", ").replace(/。/g, " ").replace(/：/g, ": ").trim();
+
       const submitBody = JSON.stringify({
         token: apiKey,
-        tag: prompt,
+        tag: cleanedTag,
         artist: "",
         model: model || "nai-diffusion-4-5-full",
         size: sizeLabel,
@@ -240,7 +245,7 @@ async function runNovelAiGeneration(input: ImageGenerationRequest): Promise<{ st
         scale: 6,
         cfg: 0,
         sampler: "k_dpmpp_2m_sde",
-        negative: input.negativePrompt?.trim() ? input.negativePrompt.trim() : defaultNegative,
+        negative: rawNeg,
         nocache: "1",
         noise_schedule: "karras",
       });
