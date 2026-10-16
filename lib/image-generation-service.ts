@@ -908,13 +908,6 @@ export async function generateImageFromConfiguredApi(params: {
       ? charOverride.presetId
       : settings.novelai?.activePresetId;
     const activePreset = presets.find(p => p.id === targetPresetId) || presets[0];
-    const naiApiKey = settings.novelai?.apiKey?.trim();
-    if (!naiApiKey) return null;
-
-    const presets = settings.novelai?.presets && settings.novelai.presets.length > 0
-      ? settings.novelai.presets
-      : [DEFAULT_NOVELAI_PRESET];
-    const activePreset = presets.find(p => p.id === settings.novelai?.activePresetId) || presets[0];
 
     // 如果描述包含中文，自动借助已配置的 LLM 转为标准 Danbooru 英文 Tag（附带角色性别与人设感知）
     const processedDescription = await translateToDanbooruTagsIfChinese(description, params.characterId, params.signal);
