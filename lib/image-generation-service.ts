@@ -159,13 +159,18 @@ async function translateToDanbooruTagsIfChinese(
       cleaned = cleaned.replace(/^(?:Danbooru\s+)?Tags\s*[:：]\s*/i, "");
       cleaned = cleaned.replace(/^Output\s*[:：]\s*/i, "");
       cleaned = cleaned.replace(/^["']|["']$/g, "").trim();
-      if (cleaned && !/[\u4e00-\u9fa5]/.test(cleaned)) {
-        return cleaned;
+      // 只要提取到了有效英文词，哪怕带有少量中文也把汉字剥离，绝不回退中文给 NAI
+      const englishOnly = cleaned.replace(/[\u4e00-\u9fa5]+/g, " ").replace(/\s+/g, " ").replace(/,\s*,/g, ",").trim();
+      if (englishOnly && englishOnly.length > 5) {
+        return englishOnly;
       }
     }
-    return trimmed;
+    // 翻译失败时的安全兜底：绝不把纯中文扔给 NAI（那必花屏），根据性别提供基础安全标签
+    const fallbackGender = characterInfo?.gender?.includes("female") ? "1girl, solo" : "1boy, solo, male focus";
+    return `${fallbackGender}, looking at viewer`;
   } catch {
-    return trimmed;
+    const fallbackGender = characterInfo?.gender?.includes("female") ? "1girl, solo" : "1boy, solo, male focus";
+    return `${fallbackGender}, looking at viewer`;
   } finally {
     if (timer) clearTimeout(timer);
   }
