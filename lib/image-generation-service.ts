@@ -69,8 +69,8 @@ ${contextBlock ? `\n[Character Baseline Appearance Profile]\n${contextBlock}\n` 
 Rules:
 1. Output ONLY the tags separated by commas. No conversational filler, no markdown, no quotes, no explanations.
 2. Subject & Gender:
-   - If character is male, use "1boy, solo, male focus" (NEVER use 1girl).
-   - If character is female, use "1girl, solo".
+   - Unless explicitly specified as female/girl, ALWAYS default to male: use "1boy, solo, male focus" (NEVER output 1girl unless female is explicitly specified).
+   - If female, use "1girl, solo".
 3. Signature Features & Appearance Consistency (CRITICAL):
    - Translate permanent character traits and accessories from the profile or scene into exact Danbooru tags:
      * Facial marks: e.g. "mole under right eye", "mole under left eye", "mole under eye", "scar on face", "freckles"
