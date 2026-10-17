@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 import { ChatPluginBootstrap } from "@/components/chat-plugin-bootstrap";
+import { KeyboardInsetHost } from "@/components/keyboard-inset-host";
 import { ChatReasoningVisibilityController } from "@/components/chat-reasoning-visibility-controller";
 import { CSSImportEnhancer } from "@/components/css-import-enhancer";
 import { PWAManifestInjector } from "@/components/pwa-manifest-injector";
@@ -45,6 +46,7 @@ export default function RootLayout({
         <CSSImportEnhancer />
         <ChatPluginBootstrap />
         <ChatReasoningVisibilityController />
+        <KeyboardInsetHost />
         {children}
       </body>
     </html>
