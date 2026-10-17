@@ -75,10 +75,11 @@ function debugBadge(text: string) {
     if (!el) {
         el = document.createElement("div");
         el.id = DEBUG_BADGE_ID;
+        // 放顶部：键盘弹起会盖住屏幕下半部分，放底部就看不到读数了。
         el.style.cssText = [
-            "position:fixed", "left:8px", "bottom:8px", "z-index:2147483647",
-            "max-width:70vw", "padding:4px 8px", "border-radius:6px",
-            "background:rgba(0,0,0,.82)", "color:#fff", "font:11px/1.5 monospace",
+            "position:fixed", "left:8px", "top:8px", "z-index:2147483647",
+            "max-width:80vw", "padding:4px 8px", "border-radius:6px",
+            "background:rgba(0,0,0,.88)", "color:#0f0", "font:11px/1.5 monospace",
             "white-space:pre-wrap", "pointer-events:none", "word-break:break-all",
         ].join(";");
         document.body.appendChild(el);
@@ -103,6 +104,25 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
         let savedTransform: string | null = null;
         let lastLogged = "";
         const timers: number[] = [];
+
+        // 诊断用峰值：键盘弹起时若角标被遮挡/读数被覆盖，仍能看到当时的极值。
+        let peakOccluded = 0;
+        let minInnerH = Number.POSITIVE_INFINITY;
+        let minVvH = Number.POSITIVE_INFINITY;
+        // 虚拟键盘 API（Chrome 系支持，可拿到精确键盘高度）
+        const vk = (navigator as Navigator & {
+            virtualKeyboard?: {
+                boundingRect: DOMRect;
+                overlaysContent: boolean;
+                addEventListener: (t: string, f: () => void) => void;
+            };
+        }).virtualKeyboard;
+
+        const vkInfo = () => {
+            if (!vk) return "无VK";
+            const h = Math.round(vk.boundingRect?.height || 0);
+            return `VK ${h} ov${vk.overlaysContent ? 1 : 0}`;
+        };
 
         const reset = (el: HTMLElement) => {
             if (applied === 0 && savedTransform === null) return;
@@ -158,6 +178,11 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
             const visibleBottom = getVisibleBottom(viewport);
             const occluded = Math.round(rect.bottom + appliedScreen - visibleBottom);
 
+            // 峰值记录：只增不减，键盘收起后仍能读到弹起时的极值。
+            if (occluded > peakOccluded) peakOccluded = occluded;
+            if (window.innerHeight < minInnerH) minInnerH = window.innerHeight;
+            if (viewport && viewport.height < minVvH) minVvH = viewport.height;
+
             // 诊断：值变化时才打日志/刷角标，平时不刷屏。
             const signature = `${occluded}|${Math.round(visibleBottom)}|${safeScale.toFixed(2)}`;
             if (signature !== lastLogged) {
@@ -170,14 +195,20 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
                     vvOffsetTop: viewport ? Math.round(viewport.offsetTop) : null,
                     scale: Number(safeScale.toFixed(2)),
                     applied,
+                    peakOccluded,
+                    minInnerH: minInnerH === Number.POSITIVE_INFINITY ? null : minInnerH,
+                    minVvH: minVvH === Number.POSITIVE_INFINITY ? null : minVvH,
                 });
                 debugBadge([
                     `遮挡 ${occluded}px`,
                     `可视底 ${Math.round(visibleBottom)}`,
                     `innerH ${window.innerHeight}`,
                     `vvH ${viewport ? Math.round(viewport.height) : "-"}`,
-                    `vvTop ${viewport ? Math.round(viewport.offsetTop) : "-"}`,
-                    `缩放 ${safeScale.toFixed(2)}`,
+                    `--- 峰值 ---`,
+                    `遮挡峰 ${peakOccluded}`,
+                    `innerH低 ${minInnerH === Number.POSITIVE_INFINITY ? "-" : Math.round(minInnerH)}`,
+                    `vvH低 ${minVvH === Number.POSITIVE_INFINITY ? "-" : Math.round(minVvH)}`,
+                    vkInfo(),
                     `已抬 ${applied}`,
                 ].join("\n"));
             }
