@@ -102,6 +102,8 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
         let applied = 0;
         let frame = 0;
         let savedTransform: string | null = null;
+        let savedPriority = "";
+        let peakApplied = 0;
         let lastLogged = "";
         const timers: number[] = [];
 
@@ -126,9 +128,14 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
 
         const reset = (el: HTMLElement) => {
             if (applied === 0 && savedTransform === null) return;
-            el.style.transform = savedTransform ?? "";
+            if (savedTransform === null) {
+                el.style.removeProperty("transform");
+            } else {
+                el.style.setProperty("transform", savedTransform, savedPriority || "");
+            }
             delete el.dataset.keyboardInset;
             savedTransform = null;
+            savedPriority = "";
             applied = 0;
         };
 
@@ -206,10 +213,12 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
                     `vvH ${viewport ? Math.round(viewport.height) : "-"}`,
                     `--- 峰值 ---`,
                     `遮挡峰 ${peakOccluded}`,
+                    `抬升峰 ${peakApplied}`,
                     `innerH低 ${minInnerH === Number.POSITIVE_INFINITY ? "-" : Math.round(minInnerH)}`,
                     `vvH低 ${minVvH === Number.POSITIVE_INFINITY ? "-" : Math.round(minVvH)}`,
                     vkInfo(),
                     `已抬 ${applied}`,
+                    `样式t ${el.style.transform ? "有" : "无"}`,
                 ].join("\n"));
             }
 
@@ -226,10 +235,16 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
                 return;
             }
 
-            if (savedTransform === null) savedTransform = el.style.transform;
-            el.style.transform = `translateY(${-local}px)`;
+            if (savedTransform === null) {
+                savedTransform = el.style.getPropertyValue("transform") || "";
+                savedPriority = el.style.getPropertyPriority("transform") || "";
+            }
+            // 用 important：输入栏类里可能带 transform（如 translateZ(0) 之类），
+            // 普通内联样式会被类规则压过，导致位移不生效。
+            el.style.setProperty("transform", `translateY(${-local}px)`, "important");
             el.dataset.keyboardInset = String(local);
             applied = local;
+            if (local > peakApplied) peakApplied = local;
         };
 
         const schedule = () => {
