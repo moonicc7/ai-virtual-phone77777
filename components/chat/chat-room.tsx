@@ -22,6 +22,7 @@ import { sendBrowserNotification } from "@/lib/browser-notification";
 import { dispatchChatMessageNotice } from "@/lib/chat-notification-events";
 import { shouldSendChatInputOnEnter } from "@/lib/chat-input-keyboard";
 import { useChatBottomReserve } from "./use-chat-bottom-reserve";
+import { useChatKeyboardInset } from "./use-chat-keyboard-inset";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
@@ -1348,6 +1349,12 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
         wrapperRef,
         scrollRef,
         `${session.id}:${offlineMode}:${isMultiSelectMode}:${showEmojiPanel}:${showStickerPanel}:${showPlusMenu}:${theaterMode}:${!!quotingMessage}`,
+    );
+    // 键盘遮挡补偿：仅在浏览器没把输入栏让进可视区时才抬（Firefox 安卓），
+    // 其余浏览器量到的超出量≈0，行为与改动前一致。
+    useChatKeyboardInset(
+        wrapperRef,
+        `${session.id}:${offlineMode}:${isMultiSelectMode}:${showEmojiPanel}:${showStickerPanel}:${showPlusMenu}:${theaterMode}`,
     );
 
     const selectStoredMessageWindow = useCallback((allMsgs: ChatMessage[]) => {
