@@ -25,14 +25,38 @@ const MIN_OCCLUSION_PX = 12;
 /** 输入栏标识：优先用 data-ui，兜底用类名（防止属性被改后彻底失效）。 */
 const INPUT_BAR_SELECTOR = '[data-ui="input"], .chat-input-bar';
 
-/** 与 use-chat-bottom-reserve 一致：输入栏是 wrapper 的直接子元素。 */
-function findInputBar(wrapper: HTMLElement): HTMLElement | null {
+/** 输入栏标识判定。 */
+function isInputBar(el: HTMLElement): boolean {
+    return el.dataset.ui === "input" || el.classList.contains("chat-input-bar");
+}
+
+/**
+ * 找出真正可见的那个输入栏。
+ * 聊天室可能同时存在多个候选（旧实例未卸载、多选模式的替身等），
+ * 只取第一个会挑中尺寸为 0 的隐藏元素，因此扫全部候选、取面积最大的。
+ */
+function findInputBar(wrapper: HTMLElement): { el: HTMLElement | null; count: number } {
+    const candidates: HTMLElement[] = [];
     for (const child of Array.from(wrapper.children)) {
-        if (!(child instanceof HTMLElement)) continue;
-        if (child.dataset.ui === "input") return child;
-        if (child.classList.contains("chat-input-bar")) return child;
+        if (child instanceof HTMLElement && isInputBar(child)) candidates.push(child);
     }
-    return wrapper.querySelector<HTMLElement>(INPUT_BAR_SELECTOR);
+    if (candidates.length === 0) {
+        for (const found of Array.from(wrapper.querySelectorAll<HTMLElement>(INPUT_BAR_SELECTOR))) {
+            candidates.push(found);
+        }
+    }
+
+    let best: HTMLElement | null = null;
+    let bestArea = 0;
+    for (const candidate of candidates) {
+        const rect = candidate.getBoundingClientRect();
+        const area = rect.width * rect.height;
+        if (area > bestArea) {
+            bestArea = area;
+            best = candidate;
+        }
+    }
+    return { el: best, count: candidates.length };
 }
 
 /** 可视区底边：取 window.innerHeight 与 visualViewport 底边的较小值。 */
@@ -90,15 +114,17 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
 
         const measure = () => {
             frame = 0;
-            const el = findInputBar(wrapper);
+            const found = findInputBar(wrapper);
+            const el = found.el;
             if (!el) {
                 // 多选模式下输入栏会卸载：清掉簿记，避免残留的 transform
                 // 被下次挂载的新元素继承。
                 applied = 0;
                 savedTransform = null;
-                if (lastLogged !== "no-el") {
-                    lastLogged = "no-el";
-                    debugBadge("未找到输入栏");
+                const key = `no-el-${found.count}`;
+                if (lastLogged !== key) {
+                    lastLogged = key;
+                    debugBadge(`未找到输入栏\n候选 ${found.count}`);
                 }
                 return;
             }
@@ -106,9 +132,15 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
             const rect = el.getBoundingClientRect();
             if (rect.width <= 0 || rect.height <= 0) {
                 reset(el);
-                if (lastLogged !== "zero-size") {
-                    lastLogged = "zero-size";
-                    debugBadge(`输入栏尺寸为0\nw${Math.round(rect.width)} h${Math.round(rect.height)}`);
+                const key = `zero-${found.count}-${Math.round(rect.width)}x${Math.round(rect.height)}`;
+                if (lastLogged !== key) {
+                    lastLogged = key;
+                    debugBadge([
+                        `尺寸为0 (候选${found.count})`,
+                        `w${Math.round(rect.width)} h${Math.round(rect.height)}`,
+                        `offsetW ${el.offsetWidth}`,
+                        `wrapH ${Math.round(wrapper.getBoundingClientRect().height)}`,
+                    ].join("\n"));
                 }
                 return;
             }
@@ -205,8 +237,9 @@ export function useChatKeyboardInset<TWrapper extends HTMLElement>(
             window.removeEventListener("resize", schedule);
             window.removeEventListener("focusin", scheduleSettled);
             window.removeEventListener("focusout", scheduleSettled);
-            const el = findInputBar(wrapper);
-            if (el) reset(el);
+            const cleanupTarget = findInputBar(wrapper).el;
+            if (cleanupTarget) reset(cleanupTarget);
+            document.getElementById(DEBUG_BADGE_ID)?.remove();
         };
     }, [wrapperRef, refreshKey]);
 }
